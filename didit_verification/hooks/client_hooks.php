@@ -1,5 +1,9 @@
 <?php
 
+if (!defined("WHMCS")) {
+    die("Access denied");
+}
+
 use WHMCS\Database\Capsule;
 
 /*
@@ -10,16 +14,13 @@ use WHMCS\Database\Capsule;
 
 add_hook('ClientAreaHomepage', 1, function ($vars) {
 
-    if (!isset($_SESSION['uid'])) {
+    $userid = didit_get_client_id();
+
+    if (empty($userid)) {
         return;
     }
 
-    $userid = $_SESSION['uid'];
-
-    $session = Capsule::table('mod_didit_sessions')
-        ->where('userid', $userid)
-        ->orderBy('updated_at', 'desc')
-        ->first();
+    $session = didit_get_current_session($userid);
 
     $status      = $session->status ?? "Not Started";
     $report      = $session->report_file ?? '';
@@ -29,7 +30,7 @@ add_hook('ClientAreaHomepage', 1, function ($vars) {
     $icon  = "⏳";
 
     $button = '
-    <a href="index.php?m=didit_verification&action=start"
+    <a href="index.php?m=didit_verification"
        class="btn btn-warning btn-sm mt-2">
        Complete Verification
     </a>';
@@ -80,10 +81,28 @@ add_hook('ClientAreaHomepage', 1, function ($vars) {
         $icon  = "✖";
 
         $button = '
-        <a href="index.php?m=didit_verification&action=start"
+        <a href="index.php?m=didit_verification"
            class="btn btn-danger btn-sm mt-2">
            Retry Verification
         </a>';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | IN REVIEW
+    |--------------------------------------------------------------------------
+    | A reviewer already has this session — there's nothing for the
+    | client to do, and the default "Complete Verification" button set
+    | above would be actively misleading here (nothing to complete;
+    | they already finished their part). No button at all, distinct
+    | color/icon from the generic "still in progress" warning state.
+    */
+
+    if ($status === "In Review") {
+
+        $color = "info";
+        $icon  = "🔎";
+        $button = '<p class="text-muted mt-2" style="font-size:13px;">Being reviewed by our team — no action needed from you right now.</p>';
     }
 
     return '
@@ -114,11 +133,11 @@ add_hook('ClientAreaHomepage', 1, function ($vars) {
 
 add_hook('ShoppingCartValidateCheckout', 1, function ($vars) {
 
-    if (!isset($_SESSION['uid'])) {
+    $userid = didit_get_client_id();
+
+    if (empty($userid)) {
         return;
     }
-
-    $userid = $_SESSION['uid'];
 
     /*
     | Admin Override Check
@@ -132,10 +151,7 @@ add_hook('ShoppingCartValidateCheckout', 1, function ($vars) {
         return;
     }
 
-    $session = Capsule::table('mod_didit_sessions')
-        ->where('userid', $userid)
-        ->orderBy('updated_at', 'desc')
-        ->first();
+    $session = didit_get_current_session($userid);
 
     $status = $session->status ?? "Not Started";
 
@@ -156,11 +172,11 @@ add_hook('ShoppingCartValidateCheckout', 1, function ($vars) {
 
 add_hook('ClientAreaPage', 1, function ($vars) {
 
-    if (!isset($_SESSION['uid'])) {
+    $userid = didit_get_client_id();
+
+    if (empty($userid)) {
         return;
     }
-
-    $userid = $_SESSION['uid'];
 
     $override = Capsule::table('mod_didit_overrides')
         ->where('userid',$userid)
@@ -170,10 +186,7 @@ add_hook('ClientAreaPage', 1, function ($vars) {
         return;
     }
 
-    $session = Capsule::table('mod_didit_sessions')
-        ->where('userid', $userid)
-        ->orderBy('updated_at', 'desc')
-        ->first();
+    $session = didit_get_current_session($userid);
 
     $status = $session->status ?? "Not Started";
 

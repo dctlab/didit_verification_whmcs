@@ -1,15 +1,16 @@
 <?php
 
+if (!defined("WHMCS")) {
+    die("Access denied");
+}
+
 use WHMCS\Database\Capsule;
 
 add_hook('AdminAreaClientSummaryPage', 1, function ($vars) {
 
     $userid = $vars['userid'];
 
-    $session = Capsule::table('mod_didit_sessions')
-        ->where('userid', $userid)
-        ->orderBy('updated_at', 'desc')
-        ->first();
+    $session = didit_get_current_session($userid);
 
     if (!$session) {
         return;
@@ -38,6 +39,9 @@ add_hook('AdminAreaClientSummaryPage', 1, function ($vars) {
     } elseif ($status === "In Progress") {
         $color = "warning";
         $icon  = "⏳";
+    } elseif ($status === "In Review") {
+        $color = "info";
+        $icon  = "🔎";
     }
 
     // Report button
@@ -68,6 +72,30 @@ add_hook('AdminAreaClientSummaryPage', 1, function ($vars) {
         ';
     }
 
+    // Action buttons row — matches the existing "Resend KYC Email" /
+    // "View KYC Status" pattern from the reference module. Resend only
+    // shows when there's an email template configured to send (same
+    // best-effort check as the manual-action handler), so this button
+    // never silently no-ops.
+    $hasTemplate = Capsule::table('tblemailtemplates')
+        ->where('name', 'Didit KYC Status Update')
+        ->exists();
+
+    $resendUrl = "addonmodules.php?module=didit_verification&resend_kyc_email={$session->session_id}";
+    $viewStatusUrl = "addonmodules.php?module=didit_verification&search=" . urlencode($session->email ?? '');
+
+    $actionButtons = '
+        <tr>
+            <td colspan="2">
+                ' . ($hasTemplate
+                    ? '<a href="' . $resendUrl . '" class="btn btn-xs btn-warning">Resend KYC Email</a> '
+                    : ''
+                ) . '
+                <a href="' . $viewStatusUrl . '" class="btn btn-xs btn-info">View KYC Status</a>
+            </td>
+        </tr>
+    ';
+
 echo '<script>
 $(document).ready(function(){
 
@@ -91,6 +119,8 @@ $(document).ready(function(){
                 '.$verifiedRow.'
 
                 '.$button.'
+
+                '.$actionButtons.'
 
             </table>
         </div>`;
